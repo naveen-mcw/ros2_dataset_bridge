@@ -15,9 +15,10 @@ from rclpy.qos_overriding_options import QoSOverridingOptions
 from rclpy.subscription import Subscription
 from rclpy.timer import Timer
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
+from autoware_custom_msgs.msg import SceneInfo, CanBusData
 from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker, MarkerArray
-from std_msgs.msg import String, Int32, Bool
+from std_msgs.msg import String, Int32, Bool, Float32MultiArray, MultiArrayDimension
 from tf2_ros import TransformBroadcaster
 from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import TransformStamped
@@ -89,7 +90,7 @@ class ROSInterface(Node):
             P: projection matrix [3, 4]. though only [3, 3] is useful.
             frame_id: string, parent frame name.
         """
-        image_msg = self.cv_bridge.cv2_to_imgmsg(image, encoding="passthrough")
+        image_msg = self.cv_bridge.cv2_to_imgmsg(image, encoding="bgr8")
         image_msg.header.frame_id = frame_id
         image_msg.header.stamp = self.get_clock().now().to_msg()
         self.__pub_registry__[image_topic].publish(image_msg)
@@ -303,7 +304,7 @@ class ROSInterface(Node):
 
         return points
 
-    def object_to_marker(self, obj, frame_id="base", marker_id=None, color=None, duration=0.1):
+    def object_to_marker(self, obj, frame_id="base", marker_id=None, color=None, duration=0.1, stamp=None):
         """ Transform an object to a marker.
 
         Args:
@@ -324,7 +325,7 @@ class ROSInterface(Node):
 
         """
         marker = Marker()
-        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.header.stamp = stamp
         marker.header.frame_id = frame_id
         if marker_id is not None:
             marker.id = marker_id
