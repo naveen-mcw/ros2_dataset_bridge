@@ -14,7 +14,7 @@ from rclpy.node import Node
 from .utils.ros_util import ROSInterface
 from .utils.nuscenes_utils import NuscenesLoader
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
-from autoware_custom_msgs.msg import SceneInfo, CanBusData
+from autoware_internal_perception_msgs.msg import SceneInfo, CanBusData
 from std_msgs.msg import Int32, Bool, Float32MultiArray, String
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import MultiArrayDimension
