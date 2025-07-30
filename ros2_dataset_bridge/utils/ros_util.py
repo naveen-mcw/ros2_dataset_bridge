@@ -15,7 +15,6 @@ from rclpy.qos_overriding_options import QoSOverridingOptions
 from rclpy.subscription import Subscription
 from rclpy.timer import Timer
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
-from autoware_custom_msgs.msg import SceneInfo, CanBusData
 from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import String, Int32, Bool, Float32MultiArray, MultiArrayDimension
