@@ -303,10 +303,6 @@ class NuscenesVisualizeNode(object):
         scene_msg.header.stamp = self.ros_interface.get_clock().now().to_msg()
         scene_msg.header.frame_id = "base_link"
         scene_msg.scene_token = self.current_scene['token']
-        scene_msg.token = self.current_sample['token']
-        scene_msg.prev = self.current_sample['prev']
-        scene_msg.next = self.current_sample['next']
-        scene_msg.sample_token = self.current_sample['token']
         self.ros_interface.publish("/nuscenes/scene_tokens", scene_msg)
         
         # === CAN Bus Publishing ===
