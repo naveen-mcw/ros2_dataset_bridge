@@ -86,7 +86,6 @@ class NuscenesVisualizeNode(object):
         self.ros_interface.create_publisher(MarkerArray, "/nuscenes/bboxes", 1)
         self.ros_interface.create_publisher(KinematicState, "/nuscenes/can_bus", 1) 
         self.ros_interface.create_publisher(SceneInfo, "/nuscenes/scene_tokens", 1)
-        # self.ros_interface.create_publisher(Bool, "/reset_bevformer_history", 1)
         self.nusc_loader_helper = NuscenesLoader(version=self.nuscenes_version, dataroot=self.nuscenes_dir, verbose=True)
         self.nusc = self.nusc_loader_helper.get_nusc(logger=self.ros_interface.get_logger())
 
@@ -107,7 +106,7 @@ class NuscenesVisualizeNode(object):
         self.set_index(0)
         self.published = False
         self.sequence_index = 0
-        # self.prev_scene_token = self.current_scene['token']
+        self.prev_scene_token = self.current_scene['token']
         self.publishing = True
         self.pause = False
         self.stop = True
