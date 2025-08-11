@@ -14,7 +14,8 @@ from rclpy.node import Node
 from .utils.ros_util import ROSInterface
 from .utils.nuscenes_utils import NuscenesLoader
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
-from autoware_internal_perception_msgs.msg import SceneInfo, CanBusData
+from autoware_internal_perception_msgs.msg import SceneInfo
+from autoware_localization_msgs.msg import KinematicState  
 from std_msgs.msg import Int32, Bool, Float32MultiArray, String
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import MultiArrayDimension
@@ -83,8 +84,9 @@ class NuscenesVisualizeNode(object):
         self.update_frequency = self.ros_interface.get_parameter("UPDATE_FREQUENCY").get_parameter_value().double_value
 
         self.ros_interface.create_publisher(MarkerArray, "/nuscenes/bboxes", 1)
-        self.ros_interface.create_publisher(CanBusData, "/nuscenes/can_bus", 1)
+        self.ros_interface.create_publisher(KinematicState, "/nuscenes/can_bus", 1) 
         self.ros_interface.create_publisher(SceneInfo, "/nuscenes/scene_tokens", 1)
+        # self.ros_interface.create_publisher(Bool, "/reset_bevformer_history", 1)
         self.nusc_loader_helper = NuscenesLoader(version=self.nuscenes_version, dataroot=self.nuscenes_dir, verbose=True)
         self.nusc = self.nusc_loader_helper.get_nusc(logger=self.ros_interface.get_logger())
 
@@ -105,6 +107,7 @@ class NuscenesVisualizeNode(object):
         self.set_index(0)
         self.published = False
         self.sequence_index = 0
+        # self.prev_scene_token = self.current_scene['token']
         self.publishing = True
         self.pause = False
         self.stop = True
@@ -138,11 +141,11 @@ class NuscenesVisualizeNode(object):
 
     def _get_can_bus_info(self, sample):
         """
-        Extract CAN bus information for the sample.
-        This version mimics the original create_data.py logic exactly.
+        Extract CAN bus information and convert to KinematicState fields.
+        Returns a dictionary with pose, twist, and accel components.
         """
         if self.nusc_can_bus is None:
-            return np.zeros(18)
+            return None
         
         scene_name = self.nusc.get("scene", sample["scene_token"])["name"]
         sample_timestamp = sample["timestamp"]
@@ -150,7 +153,7 @@ class NuscenesVisualizeNode(object):
         try:
             pose_list = self.nusc_can_bus.get_messages(scene_name, "pose")
             if not pose_list:
-                return np.zeros(18)
+                return None
     
             last_pose = pose_list[0]
             for i, pose in enumerate(pose_list):
@@ -161,25 +164,43 @@ class NuscenesVisualizeNode(object):
             # Copy to avoid mutating original
             last_pose_copy = last_pose.copy()
     
-            can_bus = []
+            # Extract basic data
             _ = last_pose_copy.pop("utime")
-            pos = last_pose_copy.pop("pos")
-            rotation = last_pose_copy.pop("orientation")
-    
-            can_bus.extend(pos)
-            can_bus.extend(rotation)
-    
-            # ⛔ Intentionally fetching from `pose[key]` (not `last_pose_copy`)
-            for key in last_pose_copy.keys():
-                can_bus.extend(pose[key])  # This may fetch newer pose values
+            pos = last_pose_copy.pop("pos")  # [x, y, z]
+            orientation = last_pose_copy.pop("orientation")  # [w, x, y, z]
             
-            can_bus.extend([0.0, 0.0])  # pad to 18
-    
-            return np.array(can_bus, dtype=np.float32)[:18]  # Ensure exactly 18 elements
+            # Create result dictionary for mapping to KinematicState
+            result = {
+                'pos': pos,
+                'orientation': orientation,
+                'vel': [0.0, 0.0, 0.0],  # Default linear velocity
+                'rotation_rate': [0.0, 0.0, 0.0],  # Default angular velocity  
+                'accel': [0.0, 0.0, 0.0]  # Default acceleration
+            }
+            
+            # Try to extract velocity and acceleration from remaining keys
+            remaining_keys = list(last_pose_copy.keys())
+            remaining_values = []
+            for key in remaining_keys:
+                if isinstance(last_pose_copy[key], list):
+                    remaining_values.extend(last_pose_copy[key])
+                else:
+                    remaining_values.append(last_pose_copy[key])
+            
+            # Map remaining values to velocity and acceleration if available
+            # Based on typical NuScenes CAN bus structure: vel (3), rotation_rate (3), accel (3)
+            if len(remaining_values) >= 3:
+                result['vel'] = remaining_values[0:3]
+            if len(remaining_values) >= 6:
+                result['rotation_rate'] = remaining_values[3:6]
+            if len(remaining_values) >= 9:
+                result['accel'] = remaining_values[6:9]
+            
+            return result
     
         except Exception as e:
             self.ros_interface.get_logger().debug(f"Error getting CAN bus info: {e}")
-            return np.zeros(18, dtype=np.float32)
+            return None
 
     def pause_callback(self, msg):
         self.pause = msg.data
@@ -305,20 +326,49 @@ class NuscenesVisualizeNode(object):
         scene_msg.scene_token = self.current_scene['token']
         self.ros_interface.publish("/nuscenes/scene_tokens", scene_msg)
         
-        # === CAN Bus Publishing ===
-        can_bus_msg = CanBusData()
+        # === Canbus Publishing ===
         can_bus_data = self._get_can_bus_info(self.current_sample)
-        can_bus_msg.header.stamp = self.ros_interface.get_clock().now().to_msg()
-        can_bus_msg.header.frame_id = "base_link"
         
-        can_bus_array = Float32MultiArray()
-        can_bus_array.data = can_bus_data.tolist()
-        can_bus_msg.can_bus = can_bus_array
+        kinematic_state_msg = KinematicState()
+        kinematic_state_msg.header.stamp = self.ros_interface.get_clock().now().to_msg()
+        kinematic_state_msg.header.frame_id = "base_link"
+        kinematic_state_msg.child_frame_id = "base_link"
+        
+        if can_bus_data is not None:
+            # Map position 
+            kinematic_state_msg.pose_with_covariance.pose.position.x = float(can_bus_data['pos'][0])
+            kinematic_state_msg.pose_with_covariance.pose.position.y = float(can_bus_data['pos'][1])
+            kinematic_state_msg.pose_with_covariance.pose.position.z = float(can_bus_data['pos'][2])
+            
+            # Map orientation (quaternion w, x, y, z)
+            kinematic_state_msg.pose_with_covariance.pose.orientation.w = float(can_bus_data['orientation'][0])
+            kinematic_state_msg.pose_with_covariance.pose.orientation.x = float(can_bus_data['orientation'][1])
+            kinematic_state_msg.pose_with_covariance.pose.orientation.y = float(can_bus_data['orientation'][2])
+            kinematic_state_msg.pose_with_covariance.pose.orientation.z = float(can_bus_data['orientation'][3])
+            
+            # Map linear velocity
+            kinematic_state_msg.twist_with_covariance.twist.linear.x = float(can_bus_data['vel'][0])
+            kinematic_state_msg.twist_with_covariance.twist.linear.y = float(can_bus_data['vel'][1])
+            kinematic_state_msg.twist_with_covariance.twist.linear.z = float(can_bus_data['vel'][2])
+            
+            # Map angular velocity (rotation_rate)
+            kinematic_state_msg.twist_with_covariance.twist.angular.x = float(can_bus_data['rotation_rate'][0])
+            kinematic_state_msg.twist_with_covariance.twist.angular.y = float(can_bus_data['rotation_rate'][1])
+            kinematic_state_msg.twist_with_covariance.twist.angular.z = float(can_bus_data['rotation_rate'][2])
+            
+            # Map linear acceleration
+            kinematic_state_msg.accel_with_covariance.accel.linear.x = float(can_bus_data['accel'][0])
+            kinematic_state_msg.accel_with_covariance.accel.linear.y = float(can_bus_data['accel'][1])
+            kinematic_state_msg.accel_with_covariance.accel.linear.z = float(can_bus_data['accel'][2])
+            
+            # Set zero angular acceleration (not available in NuScenes)
+            kinematic_state_msg.accel_with_covariance.accel.angular.x = 0.0
+            kinematic_state_msg.accel_with_covariance.accel.angular.y = 0.0
+            kinematic_state_msg.accel_with_covariance.accel.angular.z = 0.0
 
-        self.ros_interface.publish("/nuscenes/can_bus", can_bus_msg)
+        self.ros_interface.publish("/nuscenes/can_bus", kinematic_state_msg)
 
-
-        self.publishing = not self.pause # if paused, the original images and lidar are latched (as defined in publishers) and we will not re-publish them to save memory access. But we need to re-publish tf and markers
+        self.publishing = not self.pause
 
         if not self.pause:
             if (self.current_sample['next'] == ''):
