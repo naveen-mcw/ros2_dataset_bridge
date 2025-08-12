@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <launch>
-    <arg name="NUSCENES_DIR" default="/home/naveen/Project/Dataset/nuscenes"/>
+    <arg name="NUSCENES_DIR" default="/home/dhinesh/Project/BEVFormer_tensorrt/data/nuscenes"/>
     <arg name="NUSCENES_VER" default="v1.0-trainval"/>
-    <arg name="NUSCENES_CAN_BUS_DIR" default="/home/naveen/Project/Dataset/can_bus"/>
+    <arg name="NUSCENES_CAN_BUS_DIR" default="/home/dhinesh/Project/BEVFormer_tensorrt/data/can_bus"/>
     <arg name="UPDATE_FREQUENCY" default="10.0"/>
     <arg name="MAX_SWEEPS" default="10"/>
 

@@ -14,7 +14,6 @@ from rclpy.node import Node
 from .utils.ros_util import ROSInterface
 from .utils.nuscenes_utils import NuscenesLoader
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
-from autoware_internal_perception_msgs.msg import SceneInfo
 from autoware_localization_msgs.msg import KinematicState  
 from std_msgs.msg import Int32, Bool, Float32MultiArray, String
 from visualization_msgs.msg import MarkerArray, Marker
@@ -73,9 +72,9 @@ class NuscenesVisualizeNode(object):
     def __init__(self):
         self.ros_interface = ROSInterface("NuscenesVisualizeNode")
 
-        self.ros_interface.declare_parameter("NUSCENES_DIR", "/home/rahul/Autoware/datasets/nuscenes_dataset_mini")
+        self.ros_interface.declare_parameter("NUSCENES_DIR", "/home/dhinesh/Project/BEVFormer_tensorrt/data/nuscenes")
         self.ros_interface.declare_parameter("NUSCENES_VER", "v1.0-trainval")
-        self.ros_interface.declare_parameter("NUSCENES_CAN_BUS_DIR", "/home/rahul/Autoware/datasets/can_bus")
+        self.ros_interface.declare_parameter("NUSCENES_CAN_BUS_DIR", "/home/dhinesh/Project/BEVFormer_tensorrt/data/can_bus")
         self.ros_interface.declare_parameter("UPDATE_FREQUENCY", 8.0)
 
         self.nuscenes_dir = self.ros_interface.get_parameter("NUSCENES_DIR").get_parameter_value().string_value
@@ -84,8 +83,8 @@ class NuscenesVisualizeNode(object):
         self.update_frequency = self.ros_interface.get_parameter("UPDATE_FREQUENCY").get_parameter_value().double_value
 
         self.ros_interface.create_publisher(MarkerArray, "/nuscenes/bboxes", 1)
-        self.ros_interface.create_publisher(KinematicState, "/nuscenes/can_bus", 1) 
-        self.ros_interface.create_publisher(SceneInfo, "/nuscenes/scene_tokens", 1)
+        self.ros_interface.create_publisher(KinematicState, "/nuscenes/can_bus", 1)
+        self.ros_interface.create_publisher(Bool, "/reset_bevformer_history", 1)
         self.nusc_loader_helper = NuscenesLoader(version=self.nuscenes_version, dataroot=self.nuscenes_dir, verbose=True)
         self.nusc = self.nusc_loader_helper.get_nusc(logger=self.ros_interface.get_logger())
 
@@ -319,11 +318,13 @@ class NuscenesVisualizeNode(object):
         self.ros_interface.publish("/nuscenes/bboxes", markers)
 
         # === Scene Token Publishing ===
-        scene_msg = SceneInfo()
-        scene_msg.header.stamp = self.ros_interface.get_clock().now().to_msg()
-        scene_msg.header.frame_id = "base_link"
-        scene_msg.scene_token = self.current_scene['token']
-        self.ros_interface.publish("/nuscenes/scene_tokens", scene_msg)
+        reset_msg = Bool()
+        if self.current_scene['token'] != self.prev_scene_token:
+            reset_msg.data = True
+            self.prev_scene_token = self.current_scene['token']
+        else:
+            reset_msg.data = False
+        self.ros_interface.publish("/reset_bevformer_history", reset_msg)
         
         # === Canbus Publishing ===
         can_bus_data = self._get_can_bus_info(self.current_sample)
