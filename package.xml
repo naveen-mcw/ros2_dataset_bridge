@@ -4,7 +4,11 @@
   <name>ros2_dataset_bridge</name>
   <version>0.1.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="yliuhb@connect.ust.hk">yliuhb</maintainer>
+  <maintainer email="selventhiran@multicorewareinc.com">Selventhiran Rengaraj</maintainer>
+  <maintainer email="ramaseshan.subramanian@multicorewareinc.com">Ramaseshan Subramanian</maintainer>
+  <maintainer email="naveen.sathiyaseelan@multicorewareinc.com">Naveen Sathiyaseelan</maintainer>
+  <maintainer email="rahul.sundar@multicorewareinc.com">Rahul Sundar</maintainer>
+  <maintainer email="dhinesh.panneerselvam@multicorewareinc.com">Dhinesh Panneerselvam</maintainer>
   <license>TODO: License declaration</license>
 
   <test_depend>ament_copyright</test_depend>
